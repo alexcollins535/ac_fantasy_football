@@ -4,14 +4,6 @@ ac_fantasy_football.ffl_data_importing is a Python library of functions used for
 
 ac_fantasy_football.ffl_main contains a functional script which when run, allows the user to output player statistical leaders, a graph of Fantasy Football owner power rankings, or Fantasy Football final standings projections.
 
-## Installation
-
-Use the package manager [pip](https://pip.pypa.io/en/stable/) to install ac_fantasy_football.
-
-```bash
-pip install ac_fantasy_football
-```
-
 ## Usage
 
 ```python
