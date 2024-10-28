@@ -1,4 +1,4 @@
-import fantasy_football.ffl_data_importing as fdi
+import ffl_data_importing as fdi
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
@@ -86,7 +86,6 @@ def run_graph_fptsclass_by_team_and_position():
 
     # Cut down the full team data dataframe
     player_data = fdi.import_full_team_data('all_valid', file_path_dict)
-    #print('add fpts class')
     player_data = fdi.add_FPTS_CLASS(player_data)
     player_data['FPTS_CLASS'] = player_data['FPTS_CLASS'].astype(float)
 
@@ -260,6 +259,7 @@ def process_all_weeks_data(all_weeks_data, debug_mode=False, debug_player=False)
     global scoring_rules
     global nfl_schedule_dict
     global file_path_dict
+    global owners_for_manual_correction
 
     # Process all_weeks_data, drop players without owner, drop dnp weeks
     all_weeks_data = fdi.add_missing_player_rows(all_weeks_data, file_path_dict)
@@ -267,7 +267,7 @@ def process_all_weeks_data(all_weeks_data, debug_mode=False, debug_player=False)
         print('After add missing: ')
         print(all_weeks_data[all_weeks_data['PLAYER'] == debug_player])
     
-    all_weeks_data = fdi.add_OWNER(all_weeks_data, file_path_dict, pull_mapping_from_df=True)
+    all_weeks_data = fdi.add_OWNER(all_weeks_data, file_path_dict, owners_for_manual_correction, pull_mapping_from_df=True)
     if debug_mode:
         print('After add owner: ')
         print(all_weeks_data[all_weeks_data['PLAYER'] == debug_player])
@@ -455,12 +455,14 @@ def run_imports_cleaning_and_player_projections(drop_ffl_fa_players=False):
     global valid_weeks
     global weight_of_def_factor
     global stats
+    global file_path_dict
+    global def_scoring_ranges
 
     # -- Initial Imports and Data Cleaning--
     print('Running initial imports...')
     # Imports 
-    player_team_map = fdi.import_nfl_team_pos_mappings()
-    all_weeks_data = fdi.import_full_team_data('all_valid')
+    player_team_map = fdi.import_nfl_team_pos_mappings(file_path_dict)
+    all_weeks_data = fdi.import_full_team_data('all_valid', file_path_dict, def_scoring_ranges)
 
     if debug_mode:
         print('Before: ')
@@ -526,7 +528,7 @@ def run_final_standings_projections():
     global stats
     global file_path_dict
 
-    projections_df = run_imports_cleaning_and_player_projections(drop_ffl_fa_players=True) 
+    projections_df, def_factor_dict = run_imports_cleaning_and_player_projections(drop_ffl_fa_players=True) 
 
     # -- Calculate FFL Matchup Results --
     # Project final scores by team for each week in proj_final_score_dict formatted {OWNER: {WEEK: {'PTS': proj_fpts}}
