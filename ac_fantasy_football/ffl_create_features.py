@@ -7,8 +7,6 @@ weeks = fdi.valid_sheet_names
 positions = fdi.positions
 teams = fdi.teams
 na_val = fdi.na_val
-flex_positions = fdi.flex_positions
-start_by_pos = fdi.start_by_pos
 
 # Standard Globals
 stats_w_opp_dict = {'QB': ['FPTS', 'PATD', 'PAYDS', 'RUTD', 'RUYDS'], 
@@ -56,124 +54,6 @@ def process_result_weeks(result_weeks, include_result_week):
                 # Set the value to one week to the left of the 
                 result_weeks[index] = weeks[(weeks.index(week) - 1)]
     return result_weeks
-
-# Functions for additional features
-def add_FPTS_CLASS(data):
-    '''
-    Adds a new column to the dataframe 'FPTS_CLASS' based on 'FPTS'. Returns dataframe.
-    
-    Args:
-        data (pd.DataFrame): dataframe to add column to
-
-    Returns:
-        pd.DataFrame: dataframe with added column
-    
-    '''
-    global na_val
-
-    data.loc[data['FPTS'] == na_val, 'FPTS'] = 0
-    data['FPTS'] = data['FPTS'].astype(float)
-    data['FPTS_CLASS'] = pd.cut(data['FPTS'], bins=[-20, 10, 15, 20, 25, 100], right=False, labels=[0, 1, 2, 3, 4])
-    #print(data[data['PLAYER']=='Colts D/ST'])    
-    data['FPTS_CLASS'] = data['FPTS_CLASS'].astype(int)
-    return data
-def add_OWNER(data, pull_mapping_from_df=False):
-    '''
-    Adds column 'OWNER' to dataframe data or refreshes column using most recent roster mappings. Assumes any player without a recent listed owner (last 3 weeks) is a free agent.
-    pull_mapping_from_df is a bool, if true will pull the owner roster mappings from the passed in dataframe.
-    
-    Args:
-        data (pd.DataFrame): dataframe to add column to
-        pull_mapping_from_df (bool or pd.DataFrame, optional): if a dataframe, will pull recent roster mappings from this dataframe.
-
-    Returns:
-        pd.DataFrame: dataframe with owner data
-    
-    '''
-    if pull_mapping_from_df:
-        map_dict = fdi.import_recent_roster_mappings(pull_from_dataframe=data)
-    else: 
-        map_dict = fdi.import_recent_roster_mappings()
-    
-    
-    for index, row in data.iterrows():
-
-        if row['PLAYER'] in map_dict.keys():
-            data.loc[index, 'OWNER'] = map_dict[row['PLAYER']]
-        else:
-            data.loc[index, 'OWNER'] = 'FA'
-    return data
-def add_STARTER_and_STARTPOS(data, value_cols=['FPTS_CLASS', 'FPTS'], debug_mode=False):
-    '''
-    Takes in a dataframe where 'PLAYER' values are unique and 'OWNER' values have been added and adds columns for 'STARTER' (boolean) and
-    'STARTPOS' indicating RB1, WR2, FLEX, etc. based on 'FPTS_CLASS' and 'FPTS' columns. value_cols is a list of player values to sort by,
-    higher values are better. Returns dataframe with additional columns
-    
-    Args:
-        data (pd.DataFrame): dataframe to add columns to
-        value_cols (list, optional): list of columns used for player values in determining starters. Default: ['FPTS_CLASS', 'FPTS']
-        debug_mode (bool, optional): more verbose output used for debugging. Default: False
-
-    Returns:
-        pd.DataFrame: dataframe with added columns
-    
-    '''
-    global start_by_pos
-    global flex_positions
-    #data.loc[:, 'STARTER'] = False
-    #data.loc[:, 'STARTPOS'] = na_val
-    owners = data['OWNER'].unique()
-
-    ascending = []
-    for val in value_cols:
-        ascending.append(False)
-
-    for owner in owners:
-        # Skip players not on teams
-        if debug_mode:
-            print(owner)
-        if owner == na_val:
-            continue
-        subset = data.loc[data['OWNER'] == owner]
-        for key, value in start_by_pos.items():
-            # key is pos, value is number to start
-            if key == 'FLEX':
-                pos_subset = data.loc[(data['POS'].isin(flex_positions)) & (data['STARTER'] != True) & (data['OWNER'] == owner)]     # This only works if flex is the last listed start_by_pos
-                if pos_subset.empty:
-                    continue        # This condition causes an error, it is normal for an owner to not have a starting player due to future bye weeks
-                pos_subset_sorted = pos_subset.sort_values(by=value_cols, ascending=ascending).reset_index()
-                #print(pos_subset_sorted)
-                for i in range(value):
-                    if debug_mode:
-                        print('key: ',key,' i: ',i,' value: ',value)
-                    index_val = pos_subset_sorted.loc[i, 'index']
-                    data.loc[index_val, 'STARTER'] = True
-                    data.loc[index_val, 'STARTPOS'] = key
-            else:
-                pos_subset = subset.loc[subset['POS'] == key]
-                #if pos_subset.empty:
-                #    continue        # This condition causes an error, it is normal for an owner to not have a starting player due to future bye weeks
-                if len(pos_subset['PLAYER']) < value:
-                    continue       # This condition causes an error, it is normal for an owner to not have a starting player due to future bye weeks
-
-                pos_subset_sorted = pos_subset.sort_values(by=value_cols, ascending=ascending).reset_index()
-                #print(pos_subset_sorted)
-                for i in range(value):
-                    if debug_mode:
-                        print('key: ',key,' i: ',i,' value: ',value)
-                    index_val = pos_subset_sorted.loc[i, 'index']
-                    data.loc[index_val, 'STARTER'] = True
-                    if value > 1:
-                        start_pos = key + str(i+1)
-                    else: 
-                        start_pos = key
-                    data.loc[index_val, 'STARTPOS'] = start_pos
-    
-    # Fill in everything else
-    data.loc[data[data['STARTER'].isna()].index, 'STARTER'] = False
-    data.loc[data[data['STARTPOS'].isna()].index, 'STARTPOS'] = na_val
-    
-    return data
 
 # Functions for creating predictive model features
 def add_retro_data(df_to_add_to, ref_data=False, stat='FPTS', w_opp_data=False, span='L3', include_result_week=False, type='AVG', result_weeks=False):

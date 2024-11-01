@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 # Standard Globals
-valid_sheet_names = ['WK1', 'WK2', 'WK3', 'WK4', 'WK5', 'WK6', 'WK7']  # Update this as changes are made to source spreadsheet
+valid_sheet_names = ['WK1', 'WK2', 'WK3', 'WK4', 'WK5', 'WK6', 'WK7', 'WK8']  # Update this as changes are made to source spreadsheet
 all_sheet_names = ['WK1', 'WK2', 'WK3', 'WK4', 'WK5', 'WK6', 'WK7', 'WK8', 'WK9', 'WK10', 'WK11', 'WK12', 'WK13', 'WK14', 'WK15', 'WK16', 'WK17']
 positions = ['QB', 'RB', 'WR', 'TE', 'K', 'D/ST']
 inj_status = ['Q', 'D', 'O', 'IR']
@@ -29,7 +29,6 @@ file_path_dict = {'player_data_by_week': 'ac_fantasy_football\\player_data_by_we
                   'nfl_schedule_2024': 'ac_fantasy_football\\nfl_schedule_2024.xlsx',
                   'current_league_info': 'ac_fantasy_football\\current_league_info.xlsx'
 }
-
 
 
 
@@ -571,19 +570,21 @@ def add_dnp_players(player_stats_summary, selected_weeks, file_path_dict):
 
                 new_entries.loc[index, 'TEAM'] = key1[1]
                 new_entries.loc[index, 'POS'] = key1[2]
-                if value2 == 'BYE':
+                if value2.str.upper() == 'BYE':
                     new_entries.loc[index, 'BYE'] = True
                     new_entries.loc[index, 'OUT'] = False
                 else: 
                     new_entries.loc[index, 'BYE'] = False
                     new_entries.loc[index, 'OUT'] = True
                 index+=1
-    new_entries = new_entries.infer_objects(copy=False).fillna(na_val)
+    
+    new_entries = new_entries.infer_objects(copy=False)
+    values_dict = get_row_for_out_bye(new_entries.columns) # Filling NA, no need to worry about OUT/BYE args
+    for col in new_entries.columns:
+        new_entries[col].fillna(values_dict[col])
 
     return pd.concat([player_stats_summary, new_entries])
-
-# Used to add additional rows for players with missing info, assumed zeros for a given week
-def add_missing_player_rows(player_data, file_path_dict, fill_value=0, include_team_pos_data=True):
+def add_missing_player_rows(player_data, file_path_dict, include_team_pos_data=True):
     '''
     Adds rows to player data for listed players missing values for certain weeks due to low point totals. Fills in stats with fill_value.
     include_team_pos_data is a bool to include the players most recent team and position mapping on new entries. Returns dataframe.
@@ -591,7 +592,6 @@ def add_missing_player_rows(player_data, file_path_dict, fill_value=0, include_t
     Args:
         player_data (pd.DataFrame): dataframe to add rows to
         file_path_dict (dict): dictionary with original file name as keys and file paths as values
-        fill_value (float or str, optional): fill added player stats with this value, default: 0
         include_team_pos_data (bool, optional): include team, pos data based on most recent player data, more performance intensive, default: True
         
     Returns:
@@ -600,6 +600,9 @@ def add_missing_player_rows(player_data, file_path_dict, fill_value=0, include_t
     
     if include_team_pos_data:
         team_pos_map = import_nfl_team_pos_mappings(file_path_dict)
+    
+    # {team: {week: oppponent}}
+    nfl_schedule_dict = import_nfl_schedule_dict()
 
     players = unique(player_data['PLAYER'])
     weeks = unique(player_data['WEEK'])
@@ -627,9 +630,16 @@ def add_missing_player_rows(player_data, file_path_dict, fill_value=0, include_t
                 if include_team_pos_data:
                     new_entries.loc[ne_index, 'POS'] = team_pos_map[player][1]
                     new_entries.loc[ne_index, 'TEAM'] = team_pos_map[player][0]
-
+                    if nfl_schedule_dict[team_pos_map[player][0]][week] == 'BYE':
+                        new_entries.loc[ne_index, 'BYE'] = True
                 ne_index += 1
-    new_entries = new_entries.infer_objects(copy=False).fillna(fill_value)
+
+
+    new_entries = new_entries.infer_objects(copy=False)
+    values_dict = get_row_for_missing(new_entries.columns)
+    for col in new_entries.columns:
+        new_entries[col].fillna(values_dict[col])
+
     new_df = pd.concat([player_data, new_entries])
     new_df = new_df.reset_index(drop=True)
     return new_df
@@ -1132,8 +1142,54 @@ def add_STARTER_and_STARTPOS(data, value_cols=['FPTS_CLASS', 'FPTS'], start_by_p
     
     return data
 
+# Functions for dnp and missing handling
+def get_row_for_out_bye(columns, bye=False, out=False):
+    '''
+    Returns a dictionary used for filling columns with a value indicating player was out or on bye.
+    Args:
+        columns (list): columns to be filled
+        bye (bool): set to true if player on bye
+        out (boot): set to true if player is out
 
+    Returns:
+        dictionary: {columns: values}
+    '''
+    global na_val
+    summary_dict = {}
+    for column in columns:
+        if (column == 'OUT'):
+            summary_dict[column] = out
+        elif (column == 'BYE'):
+            summary_dict[column] = bye  
+        elif ('/' in column):
+            summary_dict[column] = na_val + '/' + na_val
+        else:
+            summary_dict[column] = na_val
+    
+    return summary_dict
+def get_row_for_missing(columns):
+    '''
+    Returns a dictionary used for filling columns with a value indicating player was missing from the top 300 on a given week.
+    Args:
+        columns (list): columns to be filled
 
+    Returns:
+        dictionary: {columns: values}
+    '''
+    global na_val
+    summary_dict = {}
+    for column in columns:
+        if (column == 'OUT'):
+            summary_dict[column] = False
+        elif (column == 'BYE'):
+            summary_dict[column] = False 
+        elif (column == 'PA') | (column == 'YA'):
+            summary_dict[column] = na_val
+        elif ('/' in column):
+            summary_dict[column] = na_val + '/' + na_val
+        else:
+            summary_dict[column] = 0
+    
+    return summary_dict
 
-
-
+# Used to add additional rows for players with missing info, assumed zeros for a given week
