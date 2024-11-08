@@ -15,17 +15,12 @@ file_path_dict = fdi.file_path_dict
 # Returns a DataFrame of Fantasy Football Player data from Weeks 1 and 2
 player_data = fdi.import_full_team_data(['WK1', 'WK2'], file_path_dict)
 
-# Adds rows to player data for players inlcuded, but missing data for
-# certain weeks (import_full_team_data only includes the top 250 offensive 
-# players and top 50 kickers by week). Fills stats with 0's
-player_data = fdi.add_missing_player_rows(player_data, file_path_dict, fill_value=0)
-
 # Refreshes player FFL owners column based on most recent owner mappings
-player_data = fdi.add_OWNER(player_data, file_path_dict)
+player_data = fdi.refresh_OWNER(player_data, file_path_dict)
 
 # Adds new STARTER and STARTPOS columns to player data (one row per player) 
 # where starters (based on most fantasy points) have STARTER = True and 
-# STARTPOS is their ranked position, like 'WR1' or 'FLEX'.
+# STARTPOS is their ranked position, like 'WR2' or 'FLEX'.
 player_data = fdi.add_STARTER_and_STARTPOS(player_data)
 
 # Returns only running backs from the player data DataFrame
